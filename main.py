@@ -2,13 +2,12 @@ from flask import Flask, json, request
 import waitress
 import sqlite3
 
-high_score_list = [{"id": 1, "name": "mike", "score": 69}, {"id": 2, "name": "donut", "score": 420}, {"id": 3, "name": "john", "score": 88}]
-
 api = Flask(__name__)
 
 def dict_factory(cursor, row):
     fields = [column[0] for column in cursor.description]
     return {key: value for key, value in zip(fields, row)}
+
 
 @api.route('/get_scores', methods=['GET'])
 def get_scores():
@@ -17,7 +16,9 @@ def get_scores():
     con.row_factory = dict_factory
     db = con.cursor()
 
-    data = db.execute("SELECT * FROM Scores ORDER BY score DESC")
+    #data = db.execute("SELECT * FROM Scores ORDER BY difficulty, score DESC")
+    data = db.execute("""SELECT * FROM Scores ORDER BY CASE
+        WHEN difficulty = 'easy' THEN 1 WHEN difficulty = 'medium' THEN 2 WHEN difficulty = 'hard' THEN 3 ELSE 4 END DESC, score DESC""")
 
     allrows = data.fetchall()
 
@@ -33,11 +34,12 @@ def get_highscore():
     con.row_factory = dict_factory
     db = con.cursor()
 
-    data = db.execute("SELECT name, MAX(score) FROM Scores")
+    #data = db.execute("SELECT name, MAX(score) FROM Scores")
+    data = db.execute("SELECT name, difficulty, MAX(score), timestamp FROM Scores GROUP BY difficulty")
 
 
-    #return json.dumps(data.fetchall()) # works, but let's just return one row instead of array
-    return json.dumps(data.fetchone())
+    return json.dumps(data.fetchall())
+    #return json.dumps(data.fetchone())
 
 
 @api.route('/put_score', methods=['PUT'])
@@ -61,7 +63,8 @@ def put_score():
 
     print(list(data.values()))
 
-    db.execute("INSERT INTO Scores (name, score) VALUES (?, ?)", list(data.values()))
+    #db.execute("INSERT INTO Scores (name, score) VALUES (?, ?)", list(data.values()))
+    db.execute("INSERT INTO Scores (name, score, difficulty, timestamp) VALUES (?, ?, ?, ?)", list(data.values()))
     #db.execute("INSERT INTO Scores VALUES (?, ?, ?)", list(data.values())) # the question is whether or not this actually
     # keeps the keys / values ordered properly when transmitted. I would much rather know that my data is being mapped
     # correctly. Perhaps make a function that takes the metadata of the table, and then with the dictionary outputs just
@@ -69,7 +72,7 @@ def put_score():
 
     con.commit()
 
-    return json.dumps(db.execute("SELECT * FROM Scores").fetchall())
+    return "Success", 201
 
 
 
